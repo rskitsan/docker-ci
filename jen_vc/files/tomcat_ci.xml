@@ -1,0 +1,212 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description></description>
+  <keepDependencies>false</keepDependencies>
+  <properties/>
+  <scm class="hudson.plugins.mercurial.MercurialSCM" plugin="mercurial@1.56">
+    <source>http://192.168.168.74/tomcat7_docker/</source>
+    <modules></modules>
+    <revisionType>CHANGESET</revisionType>
+    <revision>default</revision>
+    <clean>false</clean>
+    <credentialsId>d8eda798-5c8d-4f03-8db5-afbb2dac0f9d</credentialsId>
+    <disableChangeLog>false</disableChangeLog>
+  </scm>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <authToken>1e67047fb166261bbc5fbf1bcdc25283</authToken>
+  <triggers/>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <EnvInjectBuilder plugin="envinject@1.92.1">
+      <info>
+        <propertiesContent>IMAGE_NAME=tomcat7
+CONTAINER_NAME=tomcat7-container
+REGISTRY=192.168.168.61:5000
+REPOS_PATH=/repos/tomcat7_docker
+REMOTE_HOST=192.168.168.61</propertiesContent>
+      </info>
+    </EnvInjectBuilder>
+    <org.jenkinsci.plugins.dockerbuildstep.DockerBuilder plugin="docker-build-step@1.35">
+      <dockerCmd class="org.jenkinsci.plugins.dockerbuildstep.cmd.CreateImageCommand">
+        <dockerFolder>$WORKSPACE</dockerFolder>
+        <imageTag>$REGISTRY/$IMAGE_NAME-$BUILD_NUMBER:stable</imageTag>
+        <noCache>false</noCache>
+        <rm>false</rm>
+      </dockerCmd>
+    </org.jenkinsci.plugins.dockerbuildstep.DockerBuilder>
+    <org.jenkinsci.plugins.ansible.AnsibleAdHocCommandBuilder plugin="ansible@0.5">
+      <credentialsId>4dfa299d-f425-435d-9e28-3da5f01e85d1</credentialsId>
+      <hostPattern>$REMOTE_HOST</hostPattern>
+      <inventory class="org.jenkinsci.plugins.ansible.InventoryContent">
+        <content>[tomcat]
+$REMOTE_HOST</content>
+        <dynamic>false</dynamic>
+      </inventory>
+      <module>docker</module>
+      <command>image=$REGISTRY/$IMAGE_NAME-$BUILD_NUMBER:stable
+name=$CONTAINER_NAME-$BUILD_NUMBER
+ports=8081:8080</command>
+      <sudo>false</sudo>
+      <sudoUser></sudoUser>
+      <forks>5</forks>
+      <unbufferedOutput>true</unbufferedOutput>
+      <colorizedOutput>false</colorizedOutput>
+      <hostKeyChecking>false</hostKeyChecking>
+      <additionalParameters></additionalParameters>
+    </org.jenkinsci.plugins.ansible.AnsibleAdHocCommandBuilder>
+    <org.jenkinsci.plugins.ansible.AnsibleAdHocCommandBuilder plugin="ansible@0.5">
+      <credentialsId>4dfa299d-f425-435d-9e28-3da5f01e85d1</credentialsId>
+      <hostPattern>$REMOTE_HOST</hostPattern>
+      <inventory class="org.jenkinsci.plugins.ansible.InventoryContent">
+        <content>[tomcat]
+$REMOTE_HOST</content>
+        <dynamic>false</dynamic>
+      </inventory>
+      <module>shell</module>
+      <command>mkdir /etc/docker/certs.d/$REGISTRY -p
+keytool -printcert -rfc -sslserver $REGISTRY &gt; /etc/docker/certs.d/$REGISTRY/ca.crt</command>
+      <sudo>false</sudo>
+      <sudoUser></sudoUser>
+      <forks>5</forks>
+      <unbufferedOutput>true</unbufferedOutput>
+      <colorizedOutput>false</colorizedOutput>
+      <hostKeyChecking>false</hostKeyChecking>
+      <additionalParameters></additionalParameters>
+    </org.jenkinsci.plugins.ansible.AnsibleAdHocCommandBuilder>
+    <hudson.plugins.python.Python plugin="python@1.3">
+      <command>#!/usr/bin/env python
+import urllib2, time, os
+from socket import socket, gethostbyname, AF_INET, SOCK_STREAM
+timing=0
+time.sleep(5)
+def check_socket( IP, port ):
+  return socket(AF_INET, SOCK_STREAM).connect_ex((gethostbyname(IP), port))
+  socket(AF_INET, SOCK_STREAM).close()
+  
+if check_socket(os.environ[&apos;REMOTE_HOST&apos;], 8081 ) == 0: 
+  while timing &lt;= 60:
+    try:
+      if urllib2.urlopen(&apos;http://&apos;+os.environ[&apos;REMOTE_HOST&apos;]+&apos;:8081&apos;).getcode() == 200:
+        print &apos;********************PORT IS OPEN &amp; 200 OK******************&apos;
+        exit(0)
+    except IOError, e:
+          if hasattr(e, &apos;code&apos;): # HTTPError
+            print &apos;http error code: &apos;, e.code
+            time.sleep(1)
+            timing+=1
+          elif hasattr(e, &apos;reason&apos;): # URLError 
+            print &quot;can&apos;t connect, reason: &quot;, e.reason
+            time.sleep(1)
+            timing+=1
+          else:
+              raise
+else:
+    print &quot;TEST FAILED, PORT IS CLOSED, EXITING&quot;
+    exit(1)
+    
+print &quot;TEST FAILED, EXITING&quot;
+exit(1)
+</command>
+    </hudson.plugins.python.Python>
+    <org.jenkinsci.plugins.conditionalbuildstep.singlestep.SingleConditionalBuilder plugin="conditional-buildstep@1.3.5">
+      <condition class="org.jenkins_ci.plugins.run_condition.core.StatusCondition" plugin="run-condition@1.0">
+        <worstResult>
+          <name>SUCCESS</name>
+          <ordinal>0</ordinal>
+          <color>BLUE</color>
+          <completeBuild>true</completeBuild>
+        </worstResult>
+        <bestResult>
+          <name>SUCCESS</name>
+          <ordinal>0</ordinal>
+          <color>BLUE</color>
+          <completeBuild>true</completeBuild>
+        </bestResult>
+      </condition>
+      <buildStep class="org.jenkinsci.plugins.dockerbuildstep.DockerBuilder" plugin="docker-build-step@1.35">
+        <dockerCmd class="org.jenkinsci.plugins.dockerbuildstep.cmd.PushImageCommand">
+          <dockerRegistryEndpoint plugin="docker-commons@1.4.1">
+            <url>https://$REGISTRY</url>
+            <credentialsId>9b22795d-9cad-466f-80b0-476edc274a96</credentialsId>
+          </dockerRegistryEndpoint>
+          <image>$IMAGE_NAME-$BUILD_NUMBER</image>
+          <tag>stable</tag>
+          <registry>$REGISTRY</registry>
+        </dockerCmd>
+      </buildStep>
+      <runner class="org.jenkins_ci.plugins.run_condition.BuildStepRunner$Fail" plugin="run-condition@1.0"/>
+    </org.jenkinsci.plugins.conditionalbuildstep.singlestep.SingleConditionalBuilder>
+  </builders>
+  <publishers>
+    <org.jenkinsci.plugins.postbuildscript.PostBuildScript plugin="postbuildscript@0.17">
+      <buildSteps>
+        <hudson.tasks.Shell>
+          <command>docker logs $CONTAINER_NAME-$BUILD_NUMBER</command>
+        </hudson.tasks.Shell>
+        <org.jenkinsci.plugins.dockerbuildstep.DockerBuilder plugin="docker-build-step@1.35">
+          <dockerCmd class="org.jenkinsci.plugins.dockerbuildstep.cmd.RemoveCommand">
+            <containerIds>$CONTAINER_NAME-$BUILD_NUMBER</containerIds>
+            <ignoreIfNotFound>true</ignoreIfNotFound>
+            <removeVolumes>false</removeVolumes>
+            <force>true</force>
+          </dockerCmd>
+        </org.jenkinsci.plugins.dockerbuildstep.DockerBuilder>
+        <org.jenkinsci.plugins.dockerbuildstep.DockerBuilder plugin="docker-build-step@1.35">
+          <dockerCmd class="org.jenkinsci.plugins.dockerbuildstep.cmd.RemoveImageCommand">
+            <imageName>$REGISTRY/$IMAGE_NAME-$BUILD_NUMBER:stable</imageName>
+            <imageId></imageId>
+            <ignoreIfNotFound>true</ignoreIfNotFound>
+          </dockerCmd>
+        </org.jenkinsci.plugins.dockerbuildstep.DockerBuilder>
+      </buildSteps>
+      <scriptOnlyIfSuccess>false</scriptOnlyIfSuccess>
+      <scriptOnlyIfFailure>false</scriptOnlyIfFailure>
+      <markBuildUnstable>false</markBuildUnstable>
+    </org.jenkinsci.plugins.postbuildscript.PostBuildScript>
+    <hudson.plugins.emailext.ExtendedEmailPublisher plugin="email-ext@2.47">
+      <recipientList>nbukhter@eisgroup.com</recipientList>
+      <configuredTriggers>
+        <hudson.plugins.emailext.plugins.trigger.FailureTrigger>
+          <email>
+            <recipientList>nbukhter@eisgroup.com</recipientList>
+            <subject>$PROJECT_DEFAULT_SUBJECT</subject>
+            <body>$PROJECT_DEFAULT_CONTENT</body>
+            <recipientProviders/>
+            <attachmentsPattern></attachmentsPattern>
+            <attachBuildLog>true</attachBuildLog>
+            <compressBuildLog>false</compressBuildLog>
+            <contentType>project</contentType>
+          </email>
+        </hudson.plugins.emailext.plugins.trigger.FailureTrigger>
+        <hudson.plugins.emailext.plugins.trigger.FixedTrigger>
+          <email>
+            <recipientList>nbukhter@eisgroup.com</recipientList>
+            <subject>$PROJECT_DEFAULT_SUBJECT</subject>
+            <body>$PROJECT_DEFAULT_CONTENT</body>
+            <recipientProviders/>
+            <attachmentsPattern></attachmentsPattern>
+            <attachBuildLog>true</attachBuildLog>
+            <compressBuildLog>false</compressBuildLog>
+            <contentType>project</contentType>
+          </email>
+        </hudson.plugins.emailext.plugins.trigger.FixedTrigger>
+      </configuredTriggers>
+      <contentType>default</contentType>
+      <defaultSubject>$DEFAULT_SUBJECT</defaultSubject>
+      <defaultContent>$DEFAULT_CONTENT</defaultContent>
+      <attachmentsPattern></attachmentsPattern>
+      <presendScript>$DEFAULT_PRESEND_SCRIPT</presendScript>
+      <postsendScript>$DEFAULT_POSTSEND_SCRIPT</postsendScript>
+      <attachBuildLog>true</attachBuildLog>
+      <compressBuildLog>false</compressBuildLog>
+      <replyTo>$DEFAULT_REPLYTO</replyTo>
+      <saveOutput>false</saveOutput>
+      <disabled>false</disabled>
+    </hudson.plugins.emailext.ExtendedEmailPublisher>
+  </publishers>
+  <buildWrappers/>
+</project>

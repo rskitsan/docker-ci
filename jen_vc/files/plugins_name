@@ -1,0 +1,12 @@
+ldap
+mercurial
+docker-plugin
+Conditional-BuildStep
+docker-build-step
+email-ext
+docker-build-step
+ansible
+Run-Condition
+python
+postbuildscript
+envinject

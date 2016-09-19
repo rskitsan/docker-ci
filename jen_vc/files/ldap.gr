@@ -1,0 +1,23 @@
+import jenkins.model.*
+import hudson.security.*
+import org.jenkinsci.plugins.*
+
+String server = 'ldap://exigengroup.com'
+String rootDN = 'DC=exigengroup,DC=com'
+String userSearchBase = ''
+String userSearch = 'sAMAccountName={0}'
+String groupSearchBase = ''
+String managerDN = 'CN=ldap,CN=Users,DC=exigengroup,DC=com'
+String managerPassword = 'Exigen/1' 
+boolean inhibitInferRootDN = false
+    
+SecurityRealm ldap_realm = new LDAPSecurityRealm(server, rootDN, userSearchBase, userSearch, groupSearchBase, managerDN, managerPassword, inhibitInferRootDN) 
+Jenkins.instance.setSecurityRealm(ldap_realm)
+Jenkins.instance.save()
+instance = Jenkins.getInstance()
+
+instance.save()
+def strategy = new hudson.security.FullControlOnceLoggedInAuthorizationStrategy()
+strategy.setAllowAnonymousRead(false)
+instance.setAuthorizationStrategy(strategy)
+instance.doSafeRestart()
